@@ -1,0 +1,6 @@
+[
+  { "security" : "GOOG", "bid" : 1.21 , "ask"  : 1.22, "bidVol": 100000, "askVol": 150000},
+  { "security" : "IBM", "bid" : 1.23 , "ask"  : 1.22, "bidVol": 100000, "askVol": 150000},
+  { "security" : "BHP", "bid" : 1.21 , "ask"  : 1.22, "bidVol": 100000, "askVol": 150000},
+  { "security" : "ABC", "bid" : 1.21 , "ask"  : 1.22, "bidVol": 100000, "askVol": 150000}
+]
