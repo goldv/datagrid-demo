@@ -1,124 +1,198 @@
-var WatchStock = React.createClass({
+
+var UpdatingCell = React.createClass({
     getInitialState: function() {
-        return {symbol: ""};
-    },
-    watchStock: function() {
-        this.props.watchStockHandler(this.state.symbol);
-        this.setState({symbol: ''});
-    },
-    handleChange: function(event) {
-        this.setState({symbol: event.target.value});
+        return {isUpdating: false}
     },
     render: function () {
-        return (
-            <div className="row">
-                <p>Available stocks for demo: MCD, BA, BAC, LLY, GM, GE, UAL, WMT, AAL, JPM</p>
-                <div className="input-group">
-                    <input type="text" className="form-control" placeholder="Comma separated list of stocks to watch..." value={this.state.symbol} onChange={this.handleChange} />
-                    <span className="input-group-btn">
-                        <button className="btn btn-default" type="button" onClick={this.watchStock}>
-                            <span className="glyphicon glyphicon-eye-open" aria-hidden="true"></span> Watch
-                        </button>
-                    </span>
-                </div>
-            </div>
-        );
-    }
-});
-
-var StockRow = React.createClass({
-    unwatch: function() {
-        this.props.unwatchStockHandler(this.props.stock.symbol);
+        var cname = this.state.isUpdating ? "value-color change" : "value-color"
+        return <td className={cname}>{this.props.value}</td>
     },
-    render: function () {
-        var lastClass = '',
-            changeClass = 'change-positive',
-            iconClass = 'glyphicon glyphicon-triangle-top';
-        if (this.props.stock === this.props.last) {
-            lastClass = this.props.stock.change < 0 ? 'last-negative' : 'last-positive';
+    shouldComponentUpdate: function(nextProps, nextState){
+        return nextProps.value != this.props.value || nextState.isUpdating != this.state.isUpdating
+    },
+    componentDidUpdate: function(prevProps, prevState) {
+        if(!this.state.isUpdating && !prevState.isUpdating){
+            var elm = $(this.getDOMNode())
+            elm.one('animationend webkitAnimationEnd MSAnimationEnd oAnimationEnd', function(){
+                this.setState({isUpdating : false})
+            }.bind(this))
+            this.setState({isUpdating : true})
         }
-        if (this.props.stock.change < 0) {
-            changeClass = 'change-negative';
+    }
+})
+
+var ChangeUpdatingCell = React.createClass({
+    render: function(){
+
+        if(this.props.value == 0){
+            return <td className={'value-color'}>-</td>
+        }
+
+        var iconClass = 'glyphicon glyphicon-triangle-top',
+            changeClass = 'change-color-positive';
+        if(this.props.value < 0){
             iconClass = 'glyphicon glyphicon-triangle-bottom';
+            changeClass = 'change-color-negative'
         }
-        return (
-            <tr>
-                <td>{this.props.stock.symbol}</td>
-                <td>{this.props.stock.open}</td>
-                <td className={lastClass}>{this.props.stock.last}</td>
-                <td className={changeClass}>{this.props.stock.change} <span className={iconClass} aria-hidden="true"></span></td>
-                <td>{this.props.stock.high}</td>
-                <td>{this.props.stock.low}</td>
-                <td><button type="button" className="btn btn-default btn-sm" onClick={this.unwatch}>
-                    <span className="glyphicon glyphicon-eye-close" aria-hidden="true"></span>
-                </button></td>
-            </tr>
-        );
+
+        return <td className={changeClass}>{this.props.value} <span className={iconClass} aria-hidden="true"></span></td>
+    }
+})
+
+var MarketDataRow = React.createClass({
+    render: function () {
+        var columnInputs = Object.keys(this.props.columnMappings).reduce(function(prev,colKey) {
+            var column = this.props.columnMappings[colKey];
+            if(column.show){
+                var value = this.props.instrument[colKey]
+                if(colKey === 'change'){
+                    prev.push(<ChangeUpdatingCell value={this.props.instrument.change}/>)
+                } else{
+                    prev.push( column.dynamic ? <UpdatingCell value={value}/> : <td className="security-color">{value}</td> )
+                }
+            }
+            return prev;
+        }.bind(this), [])
+
+        return (<tr>{columnInputs}</tr>);
     }
 });
 
-var StockTable = React.createClass({
+var MarketDataConfig = React.createClass({
+    handleConfigUpdate: function(field, fieldKey, event){
+        var columnsCopy = JSON.parse(JSON.stringify(this.props.columns))
+        columnsCopy[fieldKey][field] = event.target.value
+        this.props.configUpdate(columnsCopy)
+    },
+    handleCheckedUpdate: function(field, fieldKey, value){
+        var columnsCopy = JSON.parse(JSON.stringify(this.props.columns))
+        columnsCopy[fieldKey][field] = value
+        this.props.configUpdate(columnsCopy)
+    },
+    render: function(){
+        var configClass = this.props.showConfig ? "config-screen show-config" : "config-screen"
+
+        var columnInputs = Object.keys(this.props.columns).reduce(function(prev,colKey){
+            var column = this.props.columns[colKey];
+            var checked = column.show ? <input type="checkbox" checked onChange={this.handleCheckedUpdate.bind(this,'show', colKey, false)}/> :
+                                        <input type="checkbox" onChange={this.handleCheckedUpdate.bind(this,'show',colKey, true)}/>
+
+            prev[colKey] =  (
+              <div className="form-group">
+                <label htmlFor="column-{column}" className="col-sm-2 control-label" >{colKey}</label>
+                <div className="col-sm-4">
+                    <input id="column-{column}" className="form-control input-sm" type="text" value={column.name} onChange={this.handleConfigUpdate.bind(this,'name', colKey)}/>
+                </div>
+                <div className="col-sm-1">
+                    <div className="checkbox">
+                        {checked}
+                    </div>
+                </div>
+              </div>
+            )
+
+            return prev;
+        }.bind(this), {})
+
+        return (
+          <div className={configClass}>
+            <button className="close pull-right" onClick={this.props.cancelConfig}><i className="glyphicon glyphicon-remove"></i></button>
+            <form className="form-horizontal">
+            {columnInputs}
+            </form>
+          </div>
+        )
+    }
+})
+
+var MarketDataTable = React.createClass({
+    getInitialState: function() {
+        var instruments = {};
+        feed.watch(this.props.watch);
+        feed.onChange(function(instrument) {
+            instruments[instrument.security] = instrument;
+            this.setState({instruments: instruments});
+        }.bind(this));
+
+        var columnMappings = this.props.columns.reduce(function(prev, item){
+            prev[item.name] = {
+                name : item.name,
+                show: true,
+                dynamic : item.dynamic
+            }
+            return prev;
+        }, {})
+
+        return {instruments: instruments, showConfig: false, columnMappings : columnMappings};
+    },
+    handleConfigUpdate : function(newConfigMapping){
+        this.setState({ columnMappings : newConfigMapping})
+    },
+    toggleConfig: function(){
+        this.setState({showConfig : !this.state.showConfig})
+    },
+    filterRows: function(event){
+        console.log(event.target.value)
+        this.setState({filter : event.target.value})
+    },
     render: function () {
         var items = [];
-        for (var symbol in this.props.stocks) {
-            var stock = this.props.stocks[symbol];
-            items.push(<StockRow key={stock.symbol} stock={stock} last={this.props.last} unwatchStockHandler={this.props.unwatchStockHandler}/>);
+        for (var symbol in this.state.instruments) {
+            if(!this.state.filter || symbol.toUpperCase().includes( this.state.filter.toUpperCase() )) {
+                var instrument = this.state.instruments[symbol];
+                items.push(<MarketDataRow key={instrument.security} instrument={instrument} columnMappings={this.state.columnMappings}/>);
+            }
         }
+
+        var columns = this.props.columns.reduce(function(prev, column){
+            var columnMapping = this.state.columnMappings[column.name]
+            if(columnMapping.show){
+                prev.push(<td className="value-color">{columnMapping.name}</td>)
+            }
+
+            return prev;
+        }.bind(this), [])
+
+
         return (
-            <div className="row">
-            <table className="table table-hover">
+          <div className="panel panel-default market-data">
+              <MarketDataConfig columns={this.state.columnMappings} showConfig={this.state.showConfig} cancelConfig={this.toggleConfig} configUpdate={this.handleConfigUpdate}/>
+              <div className="panel-body market-data-header">
+                    <div className="col-xs-6 search-box">
+                        <div className="inner-addon right-addon">
+                            <i className="glyphicon glyphicon-search"></i>
+                            <input className="form-control input-sm" type="text" onChange={this.filterRows}> </input>
+                        </div>
+                    </div>
+                    <div className="col-xs-offset-5 col-xs-1">
+                        <button className="btn btn-link btn-sm" onClick={this.toggleConfig}><i className="glyphicon glyphicon-cog"></i></button>
+                    </div>
+              </div>
+
+            <table className="table table-condensed">
                 <thead>
                     <tr>
-                        <th>Symbol</th>
-                        <th>Open</th>
-                        <th>Last</th>
-                        <th>Change</th>
-                        <th>High</th>
-                        <th>Low</th>
-                        <th>Unwatch</th>
+                        {columns}
                     </tr>
                 </thead>
                 <tbody>
                     {items}
                 </tbody>
             </table>
-            </div>
+          </div>
         );
     }
 });
 
-var HomePage = React.createClass({
-    getInitialState: function() {
-        var stocks = {};
-        feed.watch(['MCD', 'BA', 'BAC', 'LLY', 'GM', 'GE', 'UAL', 'WMT', 'AAL', 'JPM']);
-        feed.onChange(function(stock) {
-            stocks[stock.symbol] = stock;
-            this.setState({stocks: stocks, last: stock});
-        }.bind(this));
-        return {stocks: stocks};
-    },
-    watchStock: function(symbols) {
-        symbols = symbols.replace(/ /g,'');
-        var arr = symbols.split(",");
-        feed.watch(arr);
-    },
-    unwatchStock: function(symbol) {
-        feed.unwatch(symbol);
-        var stocks = this.state.stocks;
-        delete stocks[symbol];
-        this.setState({stocks: stocks});
-    },
-    render: function () {
-        return (
-            <div>
-                <WatchStock watchStockHandler={this.watchStock}/>
-                <StockTable stocks={this.state.stocks} last={this.state.last} unwatchStockHandler={this.unwatchStock}/>
-                <div className="row">
-                    <div className="alert alert-warning" role="alert">All stock values are fake and changes are simulated. Do not trade based on the above data.</div>
-                </div>
-            </div>
-        );
-    }
-});
+var columns = [{name: "security", dynamic: false},
+        {name:"bid", dynamic: true},
+        {name:"ask", dynamic: true},
+        {name:"bidVol", dynamic: true},
+        {name: "askVol", dynamic: true},
+        {name: "last", dynamic: true},
+        {name: "change" , dynamic: true}]
 
-React.render(<HomePage />, document.getElementById('main'));
+var watch = ["EUR/USD", "EUR/CHF", "GBP/USD", "EUR/AUD", "GBP/JPY"]
+
+
+React.render(<MarketDataTable columns={columns} watch={watch}/>, document.getElementById('main'));

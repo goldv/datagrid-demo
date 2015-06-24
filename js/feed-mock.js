@@ -2,60 +2,46 @@ feed = (function () {
 
     var watchList = [];
 
-    var stocks = [
-        {symbol: "GM", open: 38.87},
-        {symbol: "GE", open: 25.40},
-        {symbol: "MCD", open: 97.05},
-        {symbol: "UAL", open: 69.45},
-        {symbol: "WMT", open: 83.24},
-        {symbol: "AAL", open: 55.76},
-        {symbol: "LLY", open: 76.12},
-        {symbol: "JPM", open: 61.75},
-        {symbol: "BAC", open: 15.84},
-        {symbol: "BA", open: 154.50}
+    var instruments = [
+        {security: "EUR/USD", bid: 1.13410, ask: 1.13412, bidVol: 1000000, askVol: 1200000, last: 1.13410},
+        {security: "EUR/CHF", bid: 1.04532, ask: 1.04534, bidVol: 1000000, askVol: 1200000, last: 1.04532},
+        {security: "GBP/USD", bid: 1.51892, ask: 1.58194, bidVol: 1000000, askVol: 1200000, last: 1.51892},
+        {security: "EUR/AUD", bid: 1.46208, ask: 1.46210, bidVol: 1000000, askVol: 1200000, last: 1.46208},
+        {security: "GBP/JPY", bid: 195.100, ask: 195.105, bidVol: 1000000, askVol: 1200000, last: 195.100}
     ];
 
-    stocks.forEach(function(stock) {
-        stock.last = stock.open;
-        stock.high = stock.open;
-        stock.low = stock.open;
-    });
+    var opens = instruments.reduce(function(prev, item){
+        prev[item.security] = item.bid
+        return prev;
+    }, {})
 
     return {
         onChange: function(callback) {
             setInterval(function() {
-                var index = Math.floor(Math.random() * stocks.length),
-                    stock = stocks[index],
-                    maxChange = stock.open * 0.005,
+                var index = Math.floor(Math.random() * instruments.length),
+                    instrument = instruments[index],
+                    maxChange = instrument.bid * 0.005,
                     change = maxChange - Math.random() * maxChange * 2,
                     last;
 
                 change = Math.round(change * 100) / 100;
-                change = change === 0 ? 0.01 : change;
+                last = instrument.last + change;
 
-                last = stock.last + change;
 
-                if (last > stock.open * 1.15 || last < stock.open * 0.85)
-                {
-                    change = -change;
-                    last = stock.last + change;
-                }
+                instrument.last = Math.round(last * 100000) / 100000;
+                instrument.bid = Math.round( (instrument.bid + change) * 100000) / 100000;
+                instrument.ask = Math.round( (instrument.ask + change) * 100000) / 100000;
 
-                stock.change = change;
-                stock.last = Math.round(last * 100) / 100;
-                if (stock.last > stock.high) {
-                    stock.high = stock.last;
-                }
-                if (stock.last < stock.low) {
-                    stock.low = stock.last;
-                }
-                if (watchList.indexOf(stock.symbol) > -1) {
-                    callback(stock);
+
+                instrument.change = Math.round( ( instrument.bid - opens[instrument.security]) * 100) / 100
+
+
+                if (watchList.indexOf(instrument.security) > -1) {
+                    callback(instrument);
                 }
             }, 200);
         },
         watch: function(symbols) {
-            console.log(symbols);
             symbols.forEach(function(symbol) {
                 if (watchList.indexOf(symbol) < 0) {
                     watchList.push(symbol);

@@ -3,5 +3,6 @@
   "bid",
   "ask",
   "bidVol",
-  "askVol"
+  "askVol",
+  "last"
 ]
